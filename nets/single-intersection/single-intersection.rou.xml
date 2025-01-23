@@ -1,16 +1,6 @@
 <routes>
- <!-- VTypes -->
-    <vType id="ambulance" vClass="emergency" color="red" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vType id="bike" vClass="motorcycle" color="grey" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vType id="bus" vClass="bus" color="green" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vType id="car" color="cyan" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vType id="moped" vClass="moped" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vType id="police" vClass="authority" color="blue" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vType id="truck" vClass="truck" color="orange" accel="1.0" decel="4.0" emergencyDecel="12.0"/>
-    <vTypeDistribution id="mixed" vTypes="ambulance bike bus car moped police truck" probabilities="0.01 0.50 0.15 0.50 0.50 0.10 0.15"/>
-
     <route id="route_ns" edges="n_t t_s"/>
     <route id="route_we" edges="w_t t_e"/>
-    <flow id="flow_ns" type="mixed" route="route_ns" begin="0" end="100000" probability="0.2" departSpeed="max" departPos="base" departLane="best"/>
-    <flow id="flow_we" type="mixed" route="route_we" begin="0" end="100000" probability="0.5" departSpeed="max" departPos="base" departLane="best"/>
+    <flow id="flow_ns" route="route_ns" begin="0" end="100000" probability="0.2" departSpeed="max" departPos="base" departLane="best"/>
+    <flow id="flow_we" route="route_we" begin="0" end="100000" probability="0.5" departSpeed="max" departPos="base" departLane="best"/>
 </routes>

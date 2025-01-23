@@ -5,11 +5,12 @@ import networks
 from collections import namedtuple
 import copy
 import math
-import numpy as np
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
+
 
 class DqnAgent:
     def __init__(
@@ -55,7 +56,7 @@ class DqnAgent:
 
     def select_action(self, state, steps_done, invalid_action):
         original_state = state
-        state = torch.from_numpy(state).to(device)
+        state = torch.from_numpy(state)
         if self.mode == 'train':
             sample = random.random()
             eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1. * steps_done / self.eps_decay)
@@ -63,77 +64,59 @@ class DqnAgent:
                 with torch.no_grad():
                     _, sorted_indices = torch.sort(self.policy_net(state), descending=True)
                     if invalid_action:
-                        action = sorted_indices[1].item()
+                        return sorted_indices[1]
                     else:
-                        action = sorted_indices[0].item()
+                        return sorted_indices[0]
             else:
                 decrease_state = [(original_state[0] + original_state[4]) / 2,
                                   (original_state[1] + original_state[5]) / 2,
                                   (original_state[2] + original_state[6]) / 2,
                                   (original_state[3] + original_state[7]) / 2]
-                congest_phase = [i for i, s in enumerate(decrease_state) if abs(s - 1) < 1e-2]
-                if len(congest_phase) > 0 and not invalid_action:
-                    action = random.choice(congest_phase)
+                congest_phase = [i for i, s in enumerate(decrease_state) if abs(s-1) < 1e-2]
+                if len(congest_phase) > 0 and invalid_action is False:
+                    return random.choice(congest_phase)
                 else:
-                    action = random.randrange(self.n_actions)
+                    return random.randrange(self.n_actions)
         else:
             with torch.no_grad():
                 _, sorted_indices = torch.sort(self.policy_net(state), descending=True)
                 if invalid_action:
-                    action = sorted_indices[1].item()
+                    return sorted_indices[1]
                 else:
-                    action = sorted_indices[0].item()
-
-        # Ensure action is within the valid range
-        action = max(0, min(action, self.n_actions - 1))
-        return action
+                    return sorted_indices[0]
 
     def learn(self):
         if self.mode == 'train':
             if self.replay.steps_done <= 10000:
                 return
             loss_fn = nn.MSELoss()
-            optimizer = torch.optim.SGD(self.policy_net.parameters(), lr=0.00025) if self.use_sgd else torch.optim.RMSprop(self.policy_net.parameters(), lr=0.00025)
+            if self.use_sgd:
+                optimizer = torch.optim.SGD(self.policy_net.parameters(), lr=0.00025)
+            else:
+                optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=0.00025)
 
             transitions = self.replay.sample(self.batch_size)
             batch = Transition(*zip(*transitions))
-
-            # Convert numpy arrays to tensors
-            state_batch = torch.tensor(np.array(batch.state), device=device, dtype=torch.float32)
-            action_batch = torch.tensor(np.array(batch.action), device=device, dtype=torch.long).view(self.batch_size, 1)
-            reward_batch = torch.tensor(np.array(batch.reward), device=device, dtype=torch.float32).view(self.batch_size, 1)
-            next_state_batch = torch.tensor(np.array(batch.next_state), device=device, dtype=torch.float32)
-
-            # Debugging shapes
-            print(f"state_batch shape: {state_batch.shape}, action_batch shape: {action_batch.shape}, next_state_batch shape: {next_state_batch.shape}, reward_batch shape: {reward_batch.shape}", end='\r', flush=True)
-
-            # Ensure next_state_batch is not empty
-            if next_state_batch.size(0) == 0:
-                return
-
-            # Check for valid indices in action_batch
-            if torch.any(action_batch < 0) or torch.any(action_batch >= self.n_actions):
-                print(f"Invalid action indices found in action_batch: {action_batch}")
-                return
-
-            # Compute Q-values
+            state_batch = torch.cat(batch.state)
+            action_batch = torch.cat(batch.action).view(self.batch_size, 1)
+            next_state_batch = torch.cat(batch.next_state)
+            reward_batch = torch.cat(batch.reward).view(self.batch_size, 1)
             state_action_values = self.policy_net(state_batch).gather(1, action_batch)
-
-            # Compute next state values
             with torch.no_grad():
-                argmax_action = self.policy_net(next_state_batch).max(1)[1].view(-1, 1)
+                argmax_action = self.policy_net(next_state_batch).max(1)[1].view(self.batch_size, 1)
                 q_max = self.target_net(next_state_batch).gather(1, argmax_action)
                 expected_state_action_values = reward_batch + self.gamma * q_max
+                # for plot
+                self.q_value_batch_avg = torch.mean(state_action_values).item()
 
-            # Loss calculation
             loss = loss_fn(state_action_values, expected_state_action_values)
             optimizer.zero_grad()
             loss.backward()
 
-            # Gradient clipping
+            self.cal_z(state_batch, action_batch, q_max)
+
             for param in self.policy_net.parameters():
-                if param.grad is not None:
-                    param.grad.data.clamp_(-1, 1)
+                param.grad.data.clamp_(-1, 1)
             optimizer.step()
             self.learn_steps += 1
             self.update_gamma = True
@@ -145,14 +128,10 @@ class DqnAgent:
         z_optimizer.zero_grad()
         f_gamma_grad = torch.mean(0.00025 * q_max * state_action_copy_values)
         f_gamma_grad.backward()
-
-        # Ensure gradients are not None
-        self.z = {
-            'l1.weight': self.policy_net_copy.l1.weight.grad if self.policy_net_copy.l1.weight.grad is not None else torch.zeros_like(self.policy_net_copy.l1.weight),
-            'l1.bias': self.policy_net_copy.l1.bias.grad if self.policy_net_copy.l1.bias.grad is not None else torch.zeros_like(self.policy_net_copy.l1.bias),
-            'l2.weight': self.policy_net_copy.l2.weight.grad if self.policy_net_copy.l2.weight.grad is not None else torch.zeros_like(self.policy_net_copy.l2.weight),
-            'l2.bias': self.policy_net_copy.l2.bias.grad if self.policy_net_copy.l2.bias.grad is not None else torch.zeros_like(self.policy_net_copy.l2.bias)
-        }
+        self.z = {'l1.weight': self.policy_net_copy.l1.weight.grad,
+                  'l1.bias': self.policy_net_copy.l1.bias.grad,
+                  'l2.weight': self.policy_net_copy.l2.weight.grad,
+                  'l2.bias': self.policy_net_copy.l2.bias.grad}
 
     def learn_gamma(self):
         loss_fn = nn.MSELoss()
@@ -160,11 +139,10 @@ class DqnAgent:
 
         transitions = self.replay.sample(self.batch_size)
         batch = Transition(*zip(*transitions))
-        state_batch = torch.tensor(np.array(batch.state), device=device, dtype=torch.float32)
-        action_batch = torch.tensor(np.array(batch.action), device=device, dtype=torch.long).view(self.batch_size, 1)
-        next_state_batch = torch.tensor(np.array(batch.next_state), device=device, dtype=torch.float32)
-        reward_batch = torch.tensor(np.array(batch.reward), device=device, dtype=torch.float32).view(self.batch_size, 1)
-
+        state_batch = torch.cat(batch.state)
+        action_batch = torch.cat(batch.action).view(self.batch_size, 1)
+        next_state_batch = torch.cat(batch.next_state)
+        reward_batch = torch.cat(batch.reward).view(self.batch_size, 1)
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
         with torch.no_grad():
             argmax_action = self.policy_net(next_state_batch).max(1)[1].view(self.batch_size, 1)
