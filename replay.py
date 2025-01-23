@@ -22,6 +22,9 @@ class ReplayBuffer:
         # Ensure action is scalar
         if isinstance(action, torch.Tensor):
             action = action.item()
+        # Ensure states are numpy arrays with consistent shapes
+        state = np.array(state, dtype=np.float32)
+        next_state = np.array(next_state, dtype=np.float32) if next_state is not None else np.zeros_like(state)
         self.buffer.append(Transition(state, action, next_state, reward))
         self._num_added += 1
         self.steps_done += 1  # Increment steps_done

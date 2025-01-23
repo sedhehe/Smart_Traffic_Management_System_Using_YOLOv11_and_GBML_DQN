@@ -1,7 +1,6 @@
 import numpy as np
 from gym import spaces
 
-
 class TrafficSignal:
     def __init__(
         self,
@@ -205,55 +204,14 @@ class TrafficSignal:
                 [lane_id for lane_id in self.lanes_id if 'n_t' in lane_id or 's_t' in lane_id],
                 [lane_id for lane_id in self.lanes_id if 'e_t' in lane_id or 'w_t' in lane_id]
             ]
-            dict_action_wait_time = [sum(self.dict_lane_veh[lane] for lane in group) for group in lane_groups]
 
-            best_action = np.argmax(dict_action_wait_time)
-            if best_action == do_action:
-                self.last_measure = 1
-            else:
-                self.last_measure = -1
+            rewards = []
+            for group in lane_groups:
+                group_waiting = sum(self.dict_lane_veh[lane_id] for lane_id in group)
+                rewards.append(-group_waiting)
 
-        if update_reward:
-            return self.last_measure
-        else:
-            return None
+            if update_reward:
+                self.last_measure = rewards
 
-    def _compute_next_state(self):
-        current_time = self.sumo.simulation.getTime()
-        if current_time >= self.rs_update_time:
-            density = self.get_lanes_density()
-            next_state = np.array(density, dtype=np.float32)
-            self.rs_update_time = current_time + self.delta_rs_update_time  # Ensure rs_update_time progresses
-            return next_state
+            return rewards[do_action] if do_action < len(rewards) else None
         return None
-
-    def compute_state(self):
-        density = self.get_lanes_density()
-        state = np.array(density, dtype=np.float32)
-        return state
-
-    def get_lanes_density(self):
-        vehicle_size_min_gap = 7.5  # 5(vehSize) + 2.5(minGap)
-        return [min(1, self.sumo.lane.getLastStepVehicleNumber(lane_id) / (self.lanes_length[lane_id] / vehicle_size_min_gap))
-                for lane_id in self.lanes_id]
-
-    def compute_queue(self):
-        total_queue = 0
-        for lane_id in self.lanes_id:
-            halting_number = self.sumo.lane.getLastStepHaltingNumber(lane_id)
-            if halting_number is None:
-                halting_number = 0
-            total_queue += halting_number
-        return total_queue
-
-    def compute_waiting_time(self):
-        """
-        Computes the total waiting time of all vehicles in the controlled lanes.
-        :return: Total waiting time of vehicles in all controlled lanes.
-        """
-        total_waiting_time = 0
-        for lane_id in self.lanes_id:
-            vehicles = self.sumo.lane.getLastStepVehicleIDs(lane_id)
-            for vehicle_id in vehicles:
-                total_waiting_time += self.sumo.vehicle.getWaitingTime(vehicle_id)
-        return total_waiting_time

@@ -16,7 +16,6 @@ else:
 import traci
 import sumolib
 
-
 class SumoEnv(gym.Env):
     def __init__(
         self,
@@ -44,11 +43,10 @@ class SumoEnv(gym.Env):
         self.last_phase_state = None
         self.change_action_time = None
         self.sumo = None
-        # temp
         self.queue = []
         self.avg_queue = []
         self.avg_wait = []
-        self.total_rewards = 0  # Initialize as an integer
+        self.total_rewards = 0
 
         self.sumoBinary = 'sumo'
         if self.use_gui:
@@ -68,10 +66,18 @@ class SumoEnv(gym.Env):
         conn.close()
 
     def step(self, action):
+        # Detect emergency vehicles
+        emergency_lanes = self.detect_emergency_vehicles()
+
+        # Override action if emergency vehicles are detected
+        if emergency_lanes:
+            action = random.choice(emergency_lanes)  # Prioritize lane with emergency vehicles
+
         # Ensure action is within the valid range
         action = max(0, min(action, self.traffic_signal.num_green_phases - 1))
         do_action = self.traffic_signal.update(action)
         self.sumo.simulationStep()
+
         next_state = self.compute_state()
         reward = self._compute_reward(self.train_state, action)
         done = self._compute_done()
@@ -81,7 +87,7 @@ class SumoEnv(gym.Env):
 
     def _random_skip(self):
         rand_idx = np.random.randint(0, self.skip_range)
-        next_state = None  # Initialize next_state
+        next_state = None
         for _ in range(rand_idx):
             next_state, _, _, _ = self.step(rand_idx)
         return next_state
@@ -113,13 +119,29 @@ class SumoEnv(gym.Env):
     def seed(self, seed=None):
         pass
 
-    # state -> real time state; train_state -> internal state for train
     def compute_state(self):
-        return self.traffic_signal.compute_state()
+        # Include emergency vehicle presence in state
+        emergency_state = [1 if lane in self.detect_emergency_vehicles() else 0 for lane in self.traffic_signal.lanes]
+        traffic_state = self.traffic_signal.compute_state()
+        return np.concatenate((traffic_state, emergency_state))
+
+    def detect_emergency_vehicles(self):
+        # Detect emergency vehicles on all lanes
+        emergency_lanes = []
+        for lane in self.traffic_signal.lanes:
+            vehicles = traci.lane.getLastStepVehicleIDs(lane)
+            for veh in vehicles:
+                if traci.vehicle.getTypeID(veh) == "emergency":
+                    emergency_lanes.append(self.traffic_signal.lanes.index(lane))
+                    break
+        return emergency_lanes
 
     def _compute_reward(self, state, action):
+        # Penalize delays for emergency vehicles
         ts_reward = self.traffic_signal.compute_reward(state, action)
-        return ts_reward
+        emergency_lanes = state[-len(self.traffic_signal.lanes):]
+        penalty = -10 * sum(emergency_lanes)
+        return ts_reward + penalty
 
     def _compute_done(self):
         current_time = self.sumo.simulation.getTime()

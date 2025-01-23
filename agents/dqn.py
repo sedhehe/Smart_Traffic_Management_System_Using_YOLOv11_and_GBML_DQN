@@ -102,16 +102,18 @@ class DqnAgent:
             state_batch = torch.tensor(np.array(batch.state), device=device, dtype=torch.float32)
             action_batch = torch.tensor(np.array(batch.action), device=device, dtype=torch.long).view(self.batch_size, 1)
             reward_batch = torch.tensor(np.array(batch.reward), device=device, dtype=torch.float32).view(self.batch_size, 1)
-            next_state_batch = torch.tensor(np.array([s for s in batch.next_state if s is not None]), device=device, dtype=torch.float32)
+            next_state_batch = torch.tensor(np.array(batch.next_state), device=device, dtype=torch.float32)
 
             # Debugging shapes
-            # print(f"state_batch shape: {state_batch.shape}")
-            # print(f"action_batch shape: {action_batch.shape}")
-            # print(f"next_state_batch shape: {next_state_batch.shape}")
-            # print(f"reward_batch shape: {reward_batch.shape}")
+            print(f"state_batch shape: {state_batch.shape}, action_batch shape: {action_batch.shape}, next_state_batch shape: {next_state_batch.shape}, reward_batch shape: {reward_batch.shape}", end='\r', flush=True)
 
             # Ensure next_state_batch is not empty
             if next_state_batch.size(0) == 0:
+                return
+
+            # Check for valid indices in action_batch
+            if torch.any(action_batch < 0) or torch.any(action_batch >= self.n_actions):
+                print(f"Invalid action indices found in action_batch: {action_batch}")
                 return
 
             # Compute Q-values
@@ -158,10 +160,11 @@ class DqnAgent:
 
         transitions = self.replay.sample(self.batch_size)
         batch = Transition(*zip(*transitions))
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action).view(self.batch_size, 1)
-        next_state_batch = torch.cat(batch.next_state)
-        reward_batch = torch.cat(batch.reward).view(self.batch_size, 1)
+        state_batch = torch.tensor(np.array(batch.state), device=device, dtype=torch.float32)
+        action_batch = torch.tensor(np.array(batch.action), device=device, dtype=torch.long).view(self.batch_size, 1)
+        next_state_batch = torch.tensor(np.array(batch.next_state), device=device, dtype=torch.float32)
+        reward_batch = torch.tensor(np.array(batch.reward), device=device, dtype=torch.float32).view(self.batch_size, 1)
+
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
         with torch.no_grad():
             argmax_action = self.policy_net(next_state_batch).max(1)[1].view(self.batch_size, 1)
