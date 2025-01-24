@@ -24,7 +24,7 @@ flags.DEFINE_float('eps_start', 1.0, '')
 flags.DEFINE_float('eps_end', 0.1, '')
 flags.DEFINE_integer('eps_decay', 83000, '')
 flags.DEFINE_integer('target_update', 3000, '')
-flags.DEFINE_string('network_file', 'weights/weights_20250124_600.pth', '')
+flags.DEFINE_string('network_file', 'weights/weights_20250124_100.pth', '')
 flags.DEFINE_float('gamma', 0.95, '')
 flags.DEFINE_integer('batch_size', 32, '')
 flags.DEFINE_bool('use_sgd', True, 'Training with the optimizer SGD or RMSprop')
@@ -81,7 +81,8 @@ def main(argv):
                 else:
                     agent.learn_gamma()
 
-            episode_rewards += reward
+            if reward is not None:
+                episode_rewards += reward
 
         avg_waiting_times.append(env.compute_average_waiting_time())
         total_rewards.append(episode_rewards)
