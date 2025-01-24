@@ -53,10 +53,12 @@ class TrafficSignal:
                     self.green_phase = phase
                     self.yellow_phase = None
                     self.update_end_time()
-                    break
+                    return True
+        return False
 
     def change_phase(self, new_green_phase):
-        self.handle_emergency_vehicle()
+        if self.handle_emergency_vehicle():
+            return -1  # Indicate that an emergency vehicle was handled
         """
         :param new_green_phase:
         :return: do_action -> the real action operated; if is None, means the new_green_phase is not appropriate,

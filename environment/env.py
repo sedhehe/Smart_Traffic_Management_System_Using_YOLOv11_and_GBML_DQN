@@ -63,7 +63,10 @@ class SumoEnv(gym.Env):
         conn.close()
 
     def step(self, action):
-        self.traffic_signal.handle_emergency_vehicle()
+        if self.traffic_signal.handle_emergency_vehicle():
+            self.sumo.simulationStep()
+            return self.compute_state(), None, False, {'do_action': -1}
+
         next_state = None
         reward = None
         # start calculate reward
