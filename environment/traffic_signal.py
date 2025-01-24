@@ -36,7 +36,27 @@ class TrafficSignal:
         self.last_measure = 0
         self.dict_lane_veh = None
 
+    def detect_emergency_vehicle(self):
+        for lane_id in self.lanes_id:
+            veh_list = self.sumo.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_list:
+                if self.sumo.vehicle.getTypeID(veh_id) == 'emergency':
+                    return lane_id
+        return None
+
+    def handle_emergency_vehicle(self):
+        emergency_lane = self.detect_emergency_vehicle()
+        if emergency_lane:
+            for phase in self.all_green_phases:
+                if emergency_lane in phase.state:
+                    self.sumo.trafficlight.setRedYellowGreenState(self.ts_id, phase.state)
+                    self.green_phase = phase
+                    self.yellow_phase = None
+                    self.update_end_time()
+                    break
+
     def change_phase(self, new_green_phase):
+        self.handle_emergency_vehicle()
         """
         :param new_green_phase:
         :return: do_action -> the real action operated; if is None, means the new_green_phase is not appropriate,

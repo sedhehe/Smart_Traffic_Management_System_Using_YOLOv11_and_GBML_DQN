@@ -63,6 +63,7 @@ class SumoEnv(gym.Env):
         conn.close()
 
     def step(self, action):
+        self.traffic_signal.handle_emergency_vehicle()
         next_state = None
         reward = None
         # start calculate reward
@@ -160,6 +161,26 @@ class SumoEnv(gym.Env):
             self.queue = []
         q = self.traffic_signal.compute_queue()
         self.queue.append(q)
+
+    def compute_average_waiting_time(self):
+        total_waiting_time = 0
+        total_vehicles = 0
+        for lane_id in self.traffic_signal.lanes_id:
+            veh_list = self.sumo.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_list:
+                total_waiting_time += self.sumo.vehicle.getAccumulatedWaitingTime(veh_id)
+                total_vehicles += 1
+        if total_vehicles == 0:
+            return 0
+        return total_waiting_time / total_vehicles
+
+    def compute_total_reward(self):
+        total_reward = 0
+        for lane_id in self.traffic_signal.lanes_id:
+            veh_list = self.sumo.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_list:
+                total_reward += self.sumo.vehicle.getAccumulatedWaitingTime(veh_id)
+        return -total_reward
 
     @property
     def observation_space(self):

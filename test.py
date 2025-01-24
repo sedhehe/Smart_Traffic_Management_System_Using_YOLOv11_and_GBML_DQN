@@ -16,15 +16,15 @@ flags.DEFINE_integer('delta_rs_update_time', 10, 'time for calculate reward')
 flags.DEFINE_string('reward_fn', 'choose-min-waiting-time', '')
 flags.DEFINE_string('net_file', 'nets/2way-single-intersection/single-intersection.net.xml', '')
 flags.DEFINE_string('route_file', 'nets/2way-single-intersection/single-intersection-vhvh.rou.xml', '')
-flags.DEFINE_bool('use_gui', False, 'use sumo-gui instead of sumo')
-flags.DEFINE_integer('num_episodes', 601, '')
+flags.DEFINE_bool('use_gui', True, 'use sumo-gui instead of sumo')
+flags.DEFINE_integer('num_episodes', 1, '')
 flags.DEFINE_string('network', 'dqn', '')
-flags.DEFINE_string('mode', 'train', '')
+flags.DEFINE_string('mode', 'eval', '')
 flags.DEFINE_float('eps_start', 1.0, '')
 flags.DEFINE_float('eps_end', 0.1, '')
 flags.DEFINE_integer('eps_decay', 83000, '')
 flags.DEFINE_integer('target_update', 3000, '')
-flags.DEFINE_string('network_file', '', '')
+flags.DEFINE_string('network_file', 'weights/weights_20250124_600.pth', '')
 flags.DEFINE_float('gamma', 0.95, '')
 flags.DEFINE_integer('batch_size', 32, '')
 flags.DEFINE_bool('use_sgd', True, 'Training with the optimizer SGD or RMSprop')
@@ -81,8 +81,7 @@ def main(argv):
                 else:
                     agent.learn_gamma()
 
-            if reward is not None:
-                episode_rewards += reward
+            episode_rewards += reward
 
         avg_waiting_times.append(env.compute_average_waiting_time())
         total_rewards.append(episode_rewards)
