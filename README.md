@@ -2,6 +2,9 @@
 This my major project where we control the traffic signal based on the traffic density and prioritizing emergency vehicles if present using GBML-DQN and detect vehicles using YOLOv11
 
 ## To run
+
+Clone or fork the repository or download the zip file
+
 first install the requirements
 ```
 pip install -r requirements.txt
