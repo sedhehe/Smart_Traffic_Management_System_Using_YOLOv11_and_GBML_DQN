@@ -3,7 +3,6 @@ import os
 import sys
 import random
 from environment.traffic_signal import TrafficSignal
-
 import numpy as np
 
 if 'SUMO_HOME' in os.environ:
@@ -15,26 +14,13 @@ else:
 import traci
 import sumolib
 
-
 class SumoEnv(gym.Env):
-    def __init__(
-        self,
-        net_file: str,
-        route_file: str,
-        skip_range: int,
-        simulation_time: float,
-        yellow_time: int,
-        delta_rs_update_time: int,
-        reward_fn: str,
-        mode: str,
-        use_gui: bool = False
-    ):
+    def __init__(self, net_file, route_file, skip_range, simulation_time, yellow_time, delta_rs_update_time, reward_fn, mode, use_gui=False):
         self._net = net_file
         self._route = route_file
         self.skip_range = skip_range
         self.simulation_time = simulation_time
         self.yellow_time = yellow_time
-
         self.reward_fn = reward_fn
         self.mode = mode
         self.use_gui = use_gui
@@ -43,13 +29,10 @@ class SumoEnv(gym.Env):
         self.last_phase_state = None
         self.change_action_time = None
         self.sumo = None
-        # temp
         self.queue = []
         self.avg_queue = []
 
-        self.sumoBinary = 'sumo'
-        if self.use_gui:
-            self.sumoBinary = 'sumo-gui'
+        self.sumoBinary = 'sumo-gui' if self.use_gui else 'sumo'
 
         traci.start([sumolib.checkBinary('sumo'), '-n', self._net])
         conn = traci
@@ -69,7 +52,6 @@ class SumoEnv(gym.Env):
 
         next_state = None
         reward = None
-        # start calculate reward
         start = False
         done = False
         info = {'do_action': None}
@@ -86,7 +68,6 @@ class SumoEnv(gym.Env):
             self.train_state = self.compute_state()
             start = True
 
-        # compute_state must be front of compute_reward
         next_state = self._compute_next_state()
         reward = self._compute_reward(start, do_action)
         done = self._compute_done()
@@ -106,7 +87,7 @@ class SumoEnv(gym.Env):
         skip_seconds = random.randint(0, self.skip_range)
         initial_state = self.compute_state()
         if self.mode == 'train':
-            for s in range(skip_seconds):
+            for _ in range(skip_seconds):
                 rand_idx = random.randint(0, len(self.traffic_signal.all_green_phases)-1)
                 next_state, _, _, _ = self.step(rand_idx)
                 if next_state is not None:
@@ -115,8 +96,7 @@ class SumoEnv(gym.Env):
         return initial_state
 
     def reset(self):
-        sumo_cmd = [sumolib.checkBinary(self.sumoBinary), '-n', self._net, '-r', self._route,
-                    '--time-to-teleport', '1000']
+        sumo_cmd = [sumolib.checkBinary(self.sumoBinary), '-n', self._net, '-r', self._route, '--time-to-teleport', '1000']
         if self.use_gui:
             sumo_cmd.extend(['--start', '--quit-on-end'])
 
@@ -136,7 +116,6 @@ class SumoEnv(gym.Env):
     def seed(self, seed=None):
         pass
 
-    # state -> real time state; train_state -> internal state for train
     def compute_state(self):
         return self.traffic_signal.compute_state()
 
@@ -147,23 +126,16 @@ class SumoEnv(gym.Env):
         return next_state
 
     def _compute_reward(self, start, do_action):
-        ts_reward = self.traffic_signal.compute_reward(start, do_action)
-        return ts_reward
+        return self.traffic_signal.compute_reward(start, do_action)
 
     def _compute_done(self):
-        current_time = self.sumo.simulation.getTime()
-        if current_time > self.simulation_time:
-            done = True
-        else:
-            done = False
-        return done
+        return self.sumo.simulation.getTime() > self.simulation_time
 
     def _compute_average_queue(self, done):
-        if done is True and len(self.queue) > 0:
+        if done and self.queue:
             self.avg_queue.append(np.mean(self.queue))
             self.queue = []
-        q = self.traffic_signal.compute_queue()
-        self.queue.append(q)
+        self.queue.append(self.traffic_signal.compute_queue())
 
     def compute_average_waiting_time(self):
         total_waiting_time = 0
@@ -173,9 +145,7 @@ class SumoEnv(gym.Env):
             for veh_id in veh_list:
                 total_waiting_time += self.sumo.vehicle.getAccumulatedWaitingTime(veh_id)
                 total_vehicles += 1
-        if total_vehicles == 0:
-            return 0
-        return total_waiting_time / total_vehicles
+        return total_waiting_time / total_vehicles if total_vehicles else 0
 
     def compute_total_reward(self):
         total_reward = 0

@@ -31,9 +31,7 @@ flags.DEFINE_bool('use_sgd', True, 'Training with the optimizer SGD or RMSprop')
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-time = str(datetime.now()).split('.')[0].split(' ')[0]
-time = time.replace('-', '')
-
+time = str(datetime.now()).split('.')[0].split(' ')[0].replace('-', '')
 
 def main(argv):
     del argv
@@ -45,11 +43,9 @@ def main(argv):
                   delta_rs_update_time=FLAGS.delta_rs_update_time,
                   reward_fn=FLAGS.reward_fn,
                   mode=FLAGS.mode,
-                  use_gui=FLAGS.use_gui,
-                  )
+                  use_gui=FLAGS.use_gui)
     replay_buffer = ReplayBuffer(capacity=20000)
 
-    agent = None
     if FLAGS.network == 'dqn':
         input_dim = env.observation_space.shape[0]
         output_dim = env.action_space.n
@@ -76,10 +72,7 @@ def main(argv):
 
             if FLAGS.mode == 'train':
                 replay_buffer.add(env.train_state, env.next_state, reward, info['do_action'])
-                if not agent.update_gamma:
-                    agent.learn()
-                else:
-                    agent.learn_gamma()
+                agent.learn() if not agent.update_gamma else agent.learn_gamma()
 
             if reward is not None:
                 episode_rewards += reward
@@ -88,21 +81,18 @@ def main(argv):
         total_rewards.append(episode_rewards)
 
         env.close()
-        if FLAGS.mode == 'train':
-            if episode != 0 and episode % 100 == 0:
-                torch.save(agent.policy_net.state_dict(), 'weights/weights_{0}_{1}.pth'.format(time, episode))
+        if FLAGS.mode == 'train' and episode % 100 == 0:
+            torch.save(agent.policy_net.state_dict(), f'weights/weights_{time}_{episode}.pth')
 
-        print('i_episode:', episode)
-        print('eps_threshold = :', FLAGS.eps_end + (FLAGS.eps_start - FLAGS.eps_end) *
-              math.exp(-1. * replay_buffer.steps_done / FLAGS.eps_decay))
-        print('learn_steps:', agent.learn_steps)
-        print('gamma:', agent.gamma)
+        print(f'i_episode: {episode}')
+        print(f'eps_threshold = : {FLAGS.eps_end + (FLAGS.eps_start - FLAGS.eps_end) * math.exp(-1. * replay_buffer.steps_done / FLAGS.eps_decay)}')
+        print(f'learn_steps: {agent.learn_steps}')
+        print(f'gamma: {agent.gamma}')
 
-        if FLAGS.mode == 'train' and episode != 0 and episode % 100 == 0:
+        if FLAGS.mode == 'train' and episode % 100 == 0:
             plot_average_queue(env.avg_queue, episode, time)
             plot_average_waiting_times(avg_waiting_times, episode, time)
             plot_total_rewards(total_rewards, episode, time)
-
 
 if __name__ == '__main__':
     app.run(main)

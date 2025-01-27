@@ -1,22 +1,12 @@
 import numpy as np
 from gym import spaces
 
-
 class TrafficSignal:
-    def __init__(
-        self,
-        ts_id: str,
-        yellow_time: int,
-        simulation_time: float,
-        delta_rs_update_time: int,
-        reward_fn: str,
-        sumo
-    ):
+    def __init__(self, ts_id, yellow_time, simulation_time, delta_rs_update_time, reward_fn, sumo):
         self.ts_id = ts_id
         self.yellow_time = yellow_time
         self.simulation_time = simulation_time
         self.delta_rs_update_time = delta_rs_update_time
-        # reward_state_update_time
         self.rs_update_time = 0
         self.reward_fn = reward_fn
         self.sumo = sumo
@@ -29,9 +19,8 @@ class TrafficSignal:
         self.num_green_phases = len(self.all_green_phases)
         self.lanes_id = list(dict.fromkeys(self.sumo.trafficlight.getControlledLanes(self.ts_id)))
         self.lanes_length = {lane_id: self.sumo.lane.getLength(lane_id) for lane_id in self.lanes_id}
-        self.observation_space = spaces.Box(
-            low=np.zeros(len(self.lanes_id), dtype=np.float32),
-            high=np.ones(len(self.lanes_id), dtype=np.float32))
+        self.observation_space = spaces.Box(low=np.zeros(len(self.lanes_id), dtype=np.float32),
+                                            high=np.ones(len(self.lanes_id), dtype=np.float32))
         self.action_space = spaces.Discrete(self.num_green_phases)
         self.last_measure = 0
         self.dict_lane_veh = None
@@ -59,15 +48,7 @@ class TrafficSignal:
     def change_phase(self, new_green_phase):
         if self.handle_emergency_vehicle():
             return -1  # Indicate that an emergency vehicle was handled
-        """
-        :param new_green_phase:
-        :return: do_action -> the real action operated; if is None, means the new_green_phase is not appropriate,
-        need to choose another green_phase and operate again
-        """
-        # yellow_phase has not finished yet
-        # yellow_phase only has duration, no minDur or maxDur
 
-        # do_action mapping (int -> Phase)
         new_green_phase = self.all_green_phases[new_green_phase]
         do_action = new_green_phase
         current_time = self.sumo.simulation.getTime()
@@ -80,22 +61,14 @@ class TrafficSignal:
             else:
                 do_action = self.yellow_phase
         else:
-            # if old_green_phase has finished
             if current_time >= self.end_min_time:
                 if new_green_phase.state == self.green_phase.state:
                     if current_time < self.end_max_time:
                         do_action = self.green_phase
                     else:
-                        # current phase has reached the max operation time, have to find another green_phase instead
                         do_action = None
                 else:
-                    # need to set a new plan(yellow + new_green)
-                    yellow_state = ''
-                    for s in range(len(new_green_phase.state)):
-                        if self.green_phase.state[s] == 'G' and new_green_phase.state[s] == 'r':
-                            yellow_state += 'y'
-                        else:
-                            yellow_state += self.green_phase.state[s]
+                    yellow_state = ''.join(['y' if self.green_phase.state[s] == 'G' and new_green_phase.state[s] == 'r' else self.green_phase.state[s] for s in range(len(new_green_phase.state))])
                     self.yellow_phase = self.sumo.trafficlight.Phase(self.yellow_time, yellow_state)
                     self.sumo.trafficlight.setRedYellowGreenState(self.ts_id, self.yellow_phase.state)
                     self.green_phase = new_green_phase
@@ -108,7 +81,6 @@ class TrafficSignal:
         if do_action is None:
             return None
 
-        # do_action mapping (Phase -> int)
         if 'y' in do_action.state:
             do_action = -1
         else:
@@ -146,7 +118,6 @@ class TrafficSignal:
                 veh_list = self.sumo.lane.getLastStepVehicleIDs(lane_id)
                 wait_veh_list = [veh_id for veh_id in veh_list if self.sumo.vehicle.getAccumulatedWaitingTime(veh_id)>0]
                 self.dict_lane_veh[lane_id] = len(wait_veh_list)
-            # merge wait_time by actions
             dict_action_wait_time = [self.dict_lane_veh['n_t_0'] + self.dict_lane_veh['s_t_0'],
                                      self.dict_lane_veh['n_t_1'] + self.dict_lane_veh['s_t_1'],
                                      self.dict_lane_veh['e_t_0'] + self.dict_lane_veh['w_t_0'],

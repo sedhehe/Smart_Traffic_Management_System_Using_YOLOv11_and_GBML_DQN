@@ -8,26 +8,10 @@ import math
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
-
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
 class DqnAgent:
-    def __init__(
-        self,
-        mode: str,
-        replay,
-        target_update: int,
-        gamma: float,
-        use_sgd: bool,
-        eps_start: float,
-        eps_end: float,
-        eps_decay: int,
-        input_dim: int,
-        output_dim: int,
-        batch_size: int,
-        network_file: str = ''
-    ):
+    def __init__(self, mode, replay, target_update, gamma, use_sgd, eps_start, eps_end, eps_decay, input_dim, output_dim, batch_size, network_file=''):
         self.mode = mode
         self.replay = replay
         self.target_update = target_update
@@ -55,7 +39,6 @@ class DqnAgent:
         self.q_value_batch_avg = 0
 
     def select_action(self, state, steps_done, invalid_action):
-        original_state = state
         state = torch.from_numpy(state)
         if self.mode == 'train':
             sample = random.random()
@@ -63,37 +46,23 @@ class DqnAgent:
             if sample > eps_threshold:
                 with torch.no_grad():
                     _, sorted_indices = torch.sort(self.policy_net(state), descending=True)
-                    if invalid_action:
-                        return sorted_indices[1]
-                    else:
-                        return sorted_indices[0]
+                    return sorted_indices[1] if invalid_action else sorted_indices[0]
             else:
-                decrease_state = [(original_state[0] + original_state[4]) / 2,
-                                  (original_state[1] + original_state[5]) / 2,
-                                  (original_state[2] + original_state[6]) / 2,
-                                  (original_state[3] + original_state[7]) / 2]
+                decrease_state = [(state[0] + state[4]) / 2, (state[1] + state[5]) / 2, (state[2] + state[6]) / 2, (state[3] + state[7]) / 2]
                 congest_phase = [i for i, s in enumerate(decrease_state) if abs(s-1) < 1e-2]
-                if len(congest_phase) > 0 and invalid_action is False:
+                if congest_phase and not invalid_action:
                     return random.choice(congest_phase)
                 else:
                     return random.randrange(self.n_actions)
         else:
             with torch.no_grad():
                 _, sorted_indices = torch.sort(self.policy_net(state), descending=True)
-                if invalid_action:
-                    return sorted_indices[1]
-                else:
-                    return sorted_indices[0]
+                return sorted_indices[1] if invalid_action else sorted_indices[0]
 
     def learn(self):
-        if self.mode == 'train':
-            if self.replay.steps_done <= 10000:
-                return
+        if self.mode == 'train' and self.replay.steps_done > 10000:
             loss_fn = nn.MSELoss()
-            if self.use_sgd:
-                optimizer = torch.optim.SGD(self.policy_net.parameters(), lr=0.00025)
-            else:
-                optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=0.00025)
+            optimizer = torch.optim.SGD(self.policy_net.parameters(), lr=0.00025) if self.use_sgd else torch.optim.RMSprop(self.policy_net.parameters(), lr=0.00025)
 
             transitions = self.replay.sample(self.batch_size)
             batch = Transition(*zip(*transitions))
@@ -106,7 +75,6 @@ class DqnAgent:
                 argmax_action = self.policy_net(next_state_batch).max(1)[1].view(self.batch_size, 1)
                 q_max = self.target_net(next_state_batch).gather(1, argmax_action)
                 expected_state_action_values = reward_batch + self.gamma * q_max
-                # for plot
                 self.q_value_batch_avg = torch.mean(state_action_values).item()
 
             loss = loss_fn(state_action_values, expected_state_action_values)
