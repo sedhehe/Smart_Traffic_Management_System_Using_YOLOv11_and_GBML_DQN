@@ -10,7 +10,7 @@ from plots import plot_average_queue, plot_average_waiting_times, plot_total_rew
 
 FLAGS = flags.FLAGS
 flags.DEFINE_integer('skip_range', 10, 'time(seconds) range for skip randomly at the beginning')
-flags.DEFINE_float('simulation_time', 10000, 'time for simulation')
+flags.DEFINE_float('simulation_time', 5000, 'time for simulation')
 flags.DEFINE_integer('yellow_time', 2, 'time for yellow phase')
 flags.DEFINE_integer('delta_rs_update_time', 10, 'time for calculate reward')
 flags.DEFINE_string('reward_fn', 'choose-min-waiting-time', '')
