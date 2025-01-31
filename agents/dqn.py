@@ -96,10 +96,10 @@ class DqnAgent:
         z_optimizer.zero_grad()
         f_gamma_grad = torch.mean(0.00025 * q_max * state_action_copy_values)
         f_gamma_grad.backward()
-        self.z = {'layer1.weight': self.policy_net_copy.layer1.weight.grad,
-                  'layer1.bias': self.policy_net_copy.layer1.bias.grad,
-                  'layer2.weight': self.policy_net_copy.layer2.weight.grad,
-                  'layer2.bias': self.policy_net_copy.layer2.bias.grad}
+        self.z = {'l1.weight': self.policy_net_copy.l1.weight.grad,
+                  'l1.bias': self.policy_net_copy.l1.bias.grad,
+                  'l2.weight': self.policy_net_copy.l2.weight.grad,
+                  'l2.bias': self.policy_net_copy.l2.bias.grad}
 
     def learn_gamma(self):
         loss_fn = nn.MSELoss()
@@ -121,11 +121,11 @@ class DqnAgent:
         optimizer.zero_grad()
         loss.backward()
 
-        layer1_weight = self.policy_net.layer1.weight.grad * self.z['layer1.weight']
-        layer1_bias = self.policy_net.layer1.bias.grad * self.z['layer1.bias']
-        layer2_weight = self.policy_net.layer2.weight.grad * self.z['layer2.weight']
-        layer2_bias = self.policy_net.layer2.bias.grad * self.z['layer2.bias']
+        l1_weight = self.policy_net.l1.weight.grad * self.z['l1.weight']
+        l1_bias = self.policy_net.l1.bias.grad * self.z['l1.bias']
+        l2_weight = self.policy_net.l2.weight.grad * self.z['l2.weight']
+        l2_bias = self.policy_net.l2.bias.grad * self.z['l2.bias']
 
-        gamma_grad = -0.99 * torch.mean(torch.cat((layer1_weight.view(-1), layer1_bias.view(-1), layer2_weight.view(-1), layer2_bias.view(-1))))
+        gamma_grad = -0.99 * torch.mean(torch.cat((l1_weight.view(-1), l1_bias.view(-1), l2_weight.view(-1), l2_bias.view(-1))))
         self.gamma += gamma_grad
         self.update_gamma = False
