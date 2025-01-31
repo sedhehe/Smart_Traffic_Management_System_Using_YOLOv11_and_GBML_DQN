@@ -1,24 +1,23 @@
-
 import numpy as np
 from gym import spaces
 
 class TrafficSignal:
-    def __init__(self, ts_id, yellow_time, simulation_time, delta_rs_update_time, reward_fn, sumo):
-        self.ts_id = ts_id
-        self.yellow_time = yellow_time
+    def __init__(self, traffic_signal_id, yellow_phase_duration, simulation_time, reward_update_interval, reward_function, sumo):
+        self.traffic_signal_id = traffic_signal_id
+        self.yellow_phase_duration = yellow_phase_duration
         self.simulation_time = simulation_time
-        self.delta_rs_update_time = delta_rs_update_time
-        self.rs_update_time = 0
-        self.reward_fn = reward_fn
+        self.reward_update_interval = reward_update_interval
+        self.reward_update_time = 0
+        self.reward_function = reward_function
         self.sumo = sumo
         self.green_phase = None
         self.yellow_phase = None
         self.end_min_time = 0
         self.end_max_time = 0
-        self.all_phases = self.sumo.trafficlight.getAllProgramLogics(ts_id)[0].phases
+        self.all_phases = self.sumo.trafficlight.getAllProgramLogics(traffic_signal_id)[0].phases
         self.all_green_phases = [phase for phase in self.all_phases if 'y' not in phase.state]
         self.num_green_phases = len(self.all_green_phases)
-        self.lanes_id = list(dict.fromkeys(self.sumo.trafficlight.getControlledLanes(self.ts_id)))
+        self.lanes_id = list(dict.fromkeys(self.sumo.trafficlight.getControlledLanes(self.traffic_signal_id)))
         self.lanes_length = {lane_id: self.sumo.lane.getLength(lane_id) for lane_id in self.lanes_id}
         self.observation_space = spaces.Box(low=np.zeros(len(self.lanes_id), dtype=np.float32),
                                             high=np.ones(len(self.lanes_id), dtype=np.float32))
@@ -39,7 +38,7 @@ class TrafficSignal:
         if emergency_lane:
             for phase in self.all_green_phases:
                 if emergency_lane in phase.state:
-                    self.sumo.trafficlight.setRedYellowGreenState(self.ts_id, phase.state)
+                    self.sumo.trafficlight.setRedYellowGreenState(self.traffic_signal_id, phase.state)
                     self.green_phase = phase
                     self.yellow_phase = None
                     self.update_end_time()
@@ -57,7 +56,7 @@ class TrafficSignal:
             if current_time >= self.end_max_time:
                 self.yellow_phase = None
                 self.update_end_time()
-                self.sumo.trafficlight.setRedYellowGreenState(self.ts_id, self.green_phase.state)
+                self.sumo.trafficlight.setRedYellowGreenState(self.traffic_signal_id, self.green_phase.state)
                 do_action = self.green_phase
             else:
                 do_action = self.yellow_phase
@@ -70,10 +69,10 @@ class TrafficSignal:
                         do_action = None
                 else:
                     yellow_state = ''.join(['y' if self.green_phase.state[s] == 'G' and new_green_phase.state[s] == 'r' else self.green_phase.state[s] for s in range(len(new_green_phase.state))])
-                    self.yellow_phase = self.sumo.trafficlight.Phase(self.yellow_time, yellow_state)
-                    self.sumo.trafficlight.setRedYellowGreenState(self.ts_id, self.yellow_phase.state)
+                    self.yellow_phase = self.sumo.trafficlight.Phase(self.yellow_phase_duration, yellow_state)
+                    self.sumo.trafficlight.setRedYellowGreenState(self.traffic_signal_id, self.yellow_phase.state)
                     self.green_phase = new_green_phase
-                    self.rs_update_time = current_time + self.yellow_time + self.delta_rs_update_time
+                    self.reward_update_time = current_time + self.yellow_phase_duration + self.reward_update_interval
                     self.update_end_time()
                     do_action = self.yellow_phase
             else:
@@ -98,16 +97,16 @@ class TrafficSignal:
             self.end_min_time = current_time + self.green_phase.minDur
             self.end_max_time = current_time + self.green_phase.maxDur
         else:
-            self.end_min_time = current_time + self.yellow_time
-            self.end_max_time = current_time + self.yellow_time
+            self.end_min_time = current_time + self.yellow_phase_duration
+            self.end_max_time = current_time + self.yellow_phase_duration
 
     def compute_reward(self, start, do_action):
         update_reward = False
         current_time = self.sumo.simulation.getTime()
-        if current_time >= self.rs_update_time:
-            self.rs_update_time = self.simulation_time + self.delta_rs_update_time
+        if current_time >= self.reward_update_time:
+            self.reward_update_time = self.simulation_time + self.reward_update_interval
             update_reward = True
-        if self.reward_fn == 'choose-min-waiting-time':
+        if self.reward_function == 'choose-min-waiting-time':
             return self._choose_min_waiting_time(start, update_reward, do_action)
         else:
             return None
@@ -136,7 +135,7 @@ class TrafficSignal:
 
     def compute_next_state(self):
         current_time = self.sumo.simulation.getTime()
-        if current_time >= self.rs_update_time:
+        if current_time >= self.reward_update_time:
             density = self.get_lanes_density()
             next_state = np.array(density, dtype=np.float32)
             return next_state
